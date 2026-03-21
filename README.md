@@ -10,11 +10,12 @@ An internal analytics tool for Level Designers at Lila Games to explore player b
 
 | Feature | Description |
 |---|---|
-| Map overlay | Player paths, kills, deaths, loot, storm events drawn on minimap |
-| Timeline | Scrub or play back at 1×/2×/4×/8× speed |
-| Heatmaps | Spatial density for kills, deaths, loot, and traffic |
-| Player tracking | Click any player in the roster to isolate their individual journey |
-| Match browser | 796 matches across 3 maps and 5 dates, sorted by activity |
+| **Replay mode** | Watch a match unfold — player paths, kills, deaths, loot, storm events on minimap |
+| **Timeline** | Scrub or play back at 1×/2×/4×/8× speed with live kill feed |
+| **Analytics mode** | 7 heatmap overlays (traffic, K/D ratio, dead zones, loot, hot drops, bot vs human, storm) aggregated across all 796 matches |
+| **AI Insights mode** | Ask natural-language questions; Gemini highlights relevant map zones |
+| **Player tracking** | Click any player in the roster to isolate their individual journey |
+| **Match browser** | Filtered by map + date; human matches always ranked first |
 
 ## Dataset
 
@@ -162,10 +163,11 @@ lilablack/
 └── frontend/
     └── artifacts/lila-viz/
         ├── src/
-        │   ├── components/  MapViewer · Sidebar · Timeline · RightPanel
-        │   ├── lib/         Zustand store · types · coordinate utils
-        │   └── pages/       Dashboard (data loading)
-        └── public/data/     generated JSON files (committed, 8MB)
+        │   ├── components/  TopBar · MapViewer · Timeline · RosterPanel
+        │   │                AnalyticsPanel · AIPanel · KillFeed
+        │   ├── lib/         Zustand store · types · MAP_CONFIGS
+        │   └── pages/       Dashboard (data loading + layout)
+        └── public/data/     index.json · 796 match JSONs · 3 analytics grids
 ```
 
 ---
