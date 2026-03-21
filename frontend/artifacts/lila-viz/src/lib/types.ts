@@ -3,7 +3,8 @@ export interface MatchIndex {
   map: string;
   date: string;
   humans: number;
-  bots: number;
+  bots: number;       // bot player files captured in dataset (often 0 even when bots were present)
+  botKills: number;   // bots killed by humans — true indicator of bot presence in match
   totalEvents: number;
   kills: number;
   deaths: number;

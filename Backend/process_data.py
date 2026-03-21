@@ -321,6 +321,7 @@ def main():
         bots   = [p for p in players_list if p["isBot"]]
 
         kills        = sum(1 for p in players_list for e in p["events"] if e["event"] == "Kill")
+        bot_kills    = sum(1 for p in players_list for e in p["events"] if e["event"] == "BotKill")
         deaths       = sum(1 for p in players_list for e in p["events"] if e["event"] in ("Killed", "BotKilled"))
         loots        = sum(1 for p in players_list for e in p["events"] if e["event"] == "Loot")
         storm_deaths = sum(1 for p in players_list for e in p["events"] if e["event"] == "KilledByStorm")
@@ -344,7 +345,8 @@ def main():
             "map":         match["mapId"],
             "date":        match["date"],
             "humans":      len(humans),
-            "bots":        len(bots),
+            "bots":        len(bots),        # bot files captured in dataset
+            "botKills":    bot_kills,        # bots killed by humans (actual bot presence indicator)
             "totalEvents": match_events,
             "kills":       kills,
             "deaths":      deaths,

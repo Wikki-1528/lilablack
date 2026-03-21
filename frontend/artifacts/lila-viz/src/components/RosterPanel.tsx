@@ -78,12 +78,12 @@ export function RosterPanel() {
         <div className="px-3 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="grid grid-cols-3 gap-1">
             {[
-              { label: 'Humans', value: matchIndex.humans, color: '#60a5fa' },
-              { label: 'Bots',   value: matchIndex.bots,   color: '#ff8a00' },
-              { label: 'Kills',  value: matchIndex.kills,  color: '#ef4444' },
-              { label: 'Deaths', value: matchIndex.deaths, color: '#f97316' },
-              { label: 'Loot',   value: matchIndex.loots,  color: '#22c55e' },
-              { label: 'Storm',  value: matchIndex.stormDeaths, color: '#a855f7' },
+              { label: 'Humans',   value: matchIndex.humans,     color: '#60a5fa' },
+              { label: 'Bot Kills', value: matchIndex.botKills ?? matchIndex.bots, color: '#ff8a00' },
+              { label: 'Kills',    value: matchIndex.kills,      color: '#ef4444' },
+              { label: 'Deaths',   value: matchIndex.deaths,     color: '#f97316' },
+              { label: 'Loot',     value: matchIndex.loots,      color: '#22c55e' },
+              { label: 'Storm',    value: matchIndex.stormDeaths, color: '#a855f7' },
             ].map((s) => (
               <div key={s.label} className="text-center px-1 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 16, color: s.color, lineHeight: 1 }}>{s.value}</div>
