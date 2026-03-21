@@ -1,153 +1,512 @@
 # Architecture — LILA BLACK Player Journey Visualizer
 
-## Overview
+## System Overview
 
-The tool is a **static-first** React single-page application. There is no backend server required to run it. Raw parquet telemetry is pre-processed once by a Python pipeline into static JSON files, which the frontend loads directly. This keeps the architecture simple, fast, and trivially deployable.
+The tool is a **fully static single-page application**. There is no application server, no database, and no API at runtime. Raw parquet telemetry is pre-processed once offline by a Python pipeline into static JSON files, which the browser loads directly from disk or a static file server.
+
+This design choice keeps the stack minimal, eliminates backend operational overhead, and makes the tool trivially hostable anywhere — including EC2 with nginx serving flat files.
 
 ```
-Raw Data (Parquet)
-      │
-      ▼
- Python Pipeline          Backend/process_data.py
-      │
-      ▼
- Static JSON              public/data/index.json
-                          public/data/matches/{id}.json
-      │
-      ▼
- React App (Vite)         frontend/artifacts/lila-viz/
-      │
-      ▼
- Vite Build / Vercel      dist/ → static hosting
+┌─────────────────────────────────────────────────────────────────────┐
+│  OFFLINE (run once when new data arrives)                           │
+│                                                                     │
+│  Resourses/                                                         │
+│  ├── February_10/ (parquet files)                                   │
+│  ├── February_11/        │                                          │
+│  ├── February_12/        │  Backend/process_data.py                 │
+│  ├── February_13/        │  (pyarrow + pandas)                      │
+│  └── February_14/        │                                          │
+│                           ▼                                         │
+│              public/data/index.json          ← match catalogue      │
+│              public/data/matches/*.json      ← per-match events     │
+└─────────────────────────────────────────────────────────────────────┘
+                           │
+                           │  (committed to git, served as static files)
+                           │
+┌─────────────────────────────────────────────────────────────────────┐
+│  RUNTIME (served to browser)                                        │
+│                                                                     │
+│  EC2 (nginx)  ──serves──▶  React SPA (Vite build)                  │
+│                                │                                    │
+│                    ┌───────────┴───────────┐                        │
+│                    │   Zustand store        │                        │
+│                    └──┬────────────────┬───┘                        │
+│                       │                │                            │
+│               fetch index.json    fetch match.json                  │
+│               (on load)           (on match select)                 │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Data Pipeline
 
-**Input:** 1,243 `.parquet` files across 5 date directories (`February_10` – `February_14`), each file representing one match.
+### Input
 
-**Processing steps:**
+**1,243 `.parquet` files** located in `Resourses/February_XX/` directories (one file = one match).
+Each file contains a table with columns: `match_id`, `user_id`, `event`, `x`, `y`, `z`, `ts`.
 
-1. Read each parquet file with `pyarrow` + `pandas`
-2. Decode `event` column from bytes → string
-3. Convert `ts` from `datetime64[ms]` → integer milliseconds (for JSON and arithmetic)
-4. Cast `x`, `y`, `z` coordinates from `float32` → `float64` before rounding to avoid float32 precision artifacts (e.g. `-233.58` → `-233.5800018310547`)
-5. Group events by `userId` within each match, classify players as human vs bot
-6. Write one `{matchId}.json` per match, plus a global `index.json` with match metadata and aggregate stats
+| Column | Raw type | Issue |
+|---|---|---|
+| `event` | `bytes` | Must decode to `str` |
+| `ts` | `datetime64[ms]` | Must convert to `int64` (ms) for JSON |
+| `x`, `y`, `z` | `float32` | Must cast to `float64` before rounding or precision artifacts appear |
 
-**Output size:** 796 match files · 8MB total · ~10KB average per match
+### Processing steps (Backend/process_data.py)
 
-**Runtime:** ~8.6 seconds on a standard laptop for the full dataset
+```
+For each date directory:
+  For each .parquet file (= one match):
+    1. Read file with pyarrow engine
+    2. Decode event bytes → str
+    3. ts: datetime64[ms] → int64  (gives Unix ms)
+    4. x/y/z: float32 → float64 → round(2)
+    5. Separate humans vs bots by userId prefix
+    6. Group events by userId
+    7. Write public/data/matches/{matchId}.json
 
-### Key data types
+  After all matches:
+    8. Write public/data/index.json  (catalogue + aggregate stats)
+```
+
+### Critical type fixes
 
 ```python
-# Coordinate fix — must cast float32→float64 before rounding
-df["x"] = df["x"].astype(float).round(2)
+# Without this cast, float32 precision leaks into JSON:
+# -233.58 becomes -233.5800018310547
+df["x"] = df["x"].astype(float).round(2)   # float32 → float64 → round
+df["y"] = df["y"].astype(float).round(2)
+df["z"] = df["z"].astype(float).round(2)
 
-# Timestamp fix — astype int64 gives milliseconds from datetime64[ms]
+# datetime64[ms] to integer ms — .astype("int64") is reliable on pandas 2+
 df["ts"] = df["ts"].astype("int64")
+
+# bytes → str
+df["event"] = df["event"].apply(lambda b: b.decode("utf-8") if isinstance(b, bytes) else b)
 ```
+
+### Output
+
+| File | Description | Size |
+|---|---|---|
+| `public/data/index.json` | Match catalogue + aggregate stats | ~200KB |
+| `public/data/matches/*.json` | One file per match (796 files) | ~8MB total, ~10KB avg |
+
+**Runtime:** ~8.6 seconds for the full 1,243-file dataset on a standard laptop.
 
 ---
 
 ## Frontend Architecture
 
-**Stack:** React 19 · Vite 7 · TypeScript · Zustand · Tailwind CSS v4 · Lucide icons
+### Tech stack
 
-### Component tree
+| Concern | Library / Tool |
+|---|---|
+| UI framework | React 19 |
+| Build tool | Vite 7 |
+| Language | TypeScript 5 |
+| State management | Zustand 5 |
+| Styling | Tailwind CSS v4 |
+| Map rendering | HTML5 Canvas (1024×1024) |
+| Icons | Lucide React |
+| Routing | Wouter |
+| Package manager | pnpm 9 (workspace) |
+
+### Component breakdown
 
 ```
-Dashboard (pages/Dashboard.tsx)
-├── Sidebar
-│   ├── Map selector (3 maps)
-│   ├── Date filter (Feb 10–14)
-│   ├── Match dropdown (sorted by activity score)
-│   ├── Layer toggles (paths, kills, deaths, loot, storm, bots)
-│   └── Heatmap mode + opacity
-├── MapViewer
-│   ├── <img> — minimap background
-│   ├── <canvas> 1024×1024 — all overlays rendered here
-│   ├── Scanlines + vignette overlays
-│   └── HUD (map name, coords, player count, corner brackets)
-├── Timeline
-│   ├── RAF-based playback engine
-│   ├── Scrubber with event dots
-│   └── Playback controls (play/pause, skip, speed)
-└── RightPanel
-    ├── Match stats grid
-    ├── Player roster (scoreboard style, click to isolate)
-    └── Live event feed
+src/pages/Dashboard.tsx          — root page, data fetching
+│
+├── src/components/Sidebar.tsx   — left panel (260px)
+│   ├── Map selector             3 maps, single-select
+│   ├── Date filter              Feb 10–14, single-select
+│   ├── Match dropdown           sorted by activity richness score
+│   ├── Layer toggles            paths · kills · deaths · loot · storm · bots
+│   └── Heatmap controls         mode selector + opacity slider
+│
+├── src/components/MapViewer.tsx — center canvas (flex-1)
+│   ├── <img>                    minimap PNG (desaturated, 88% opacity)
+│   ├── <canvas 1024×1024>       all event overlays drawn here
+│   ├── Scanlines overlay        decorative 3px repeating gradient
+│   ├── Vignette overlay         radial gradient darkening edges
+│   └── HUD elements             map name · world coords · corner brackets
+│
+├── src/components/Timeline.tsx  — bottom bar (72px fixed height)
+│   ├── Scrubber track           with event dots at exact timestamps
+│   ├── RAF playback engine      1×/2×/4×/8× speed
+│   ├── Play/Pause/Skip controls
+│   └── Alive counter            humans still alive at currentTime
+│
+└── src/components/RightPanel.tsx — right panel (252px)
+    ├── Match stats grid         kills · deaths · loot · storm · humans · bots
+    ├── Tracking banner          shown when a player is isolated
+    ├── Roster tab               scoreboard-style, click to track player
+    └── Events tab               live feed of combat/loot events up to currentTime
 ```
 
 ### State management
 
-All UI state lives in a single Zustand store (`src/lib/store.ts`):
+A single flat Zustand store (`src/lib/store.ts`) holds all application state. No prop drilling, no Context API.
 
 ```typescript
-{
-  selectedMap, selectedDate, selectedMatchId,  // selection
-  indexData, matchData,                         // loaded data
-  currentTime, minTime, maxTime,               // timeline
-  isPlaying, playbackSpeed,                    // playback
-  layers,                                       // { paths, kills, deaths, loot, storm, bots }
-  heatmapMode, heatmapOpacity,                 // heatmap
-  highlightedPlayerId,                         // player isolation
-  playerFilter,                                // roster filter
-}
-```
+interface VisualizerStore {
+  // Selection
+  selectedMap: string;
+  selectedDate: string;
+  selectedMatchId: string | null;
 
-### Map rendering
+  // Loaded data
+  indexData: IndexData | null;
+  matchData: MatchData | null;
 
-The canvas uses a fixed **1024×1024 coordinate space** regardless of screen size. CSS `object-contain` scales both the minimap `<img>` and the `<canvas>` identically, so they stay pixel-aligned.
+  // Timeline
+  currentTime: number;      // Unix ms — current playback position
+  minTime: number;          // earliest event ts in match
+  maxTime: number;          // latest event ts in match
+  isPlaying: boolean;
+  playbackSpeed: number;    // 1 | 2 | 4 | 8
 
-World coordinates → canvas pixels:
-
-```typescript
-function worldToPixel(x, z, mapId) {
-  const { originX, originZ, scale } = MAP_CONFIGS[mapId];
-  const u = (x - originX) / scale;   // [0, 1] horizontal
-  const v = (z - originZ) / scale;   // [0, 1] vertical
-  return {
-    px: u * 1024,
-    py: (1 - v) * 1024,              // Y axis flipped (Z+ = up in world)
+  // Layers
+  layers: {
+    paths: boolean;
+    kills: boolean;
+    deaths: boolean;
+    loot: boolean;
+    storm: boolean;
+    bots: boolean;
   };
+
+  // Heatmap
+  heatmapMode: 'none' | 'kills' | 'deaths' | 'loot' | 'traffic';
+  heatmapOpacity: number;   // 0.1 – 1.0
+
+  // Player focus
+  highlightedPlayerId: string | null;   // null = show all
+  playerFilter: 'all' | 'humans' | 'bots';
 }
 ```
+
+### Map coordinate system
+
+The canvas is fixed at 1024×1024 internal pixels, scaled to fill its container by CSS `object-contain`. The minimap `<img>` uses the same CSS class, so they stay perfectly aligned at any container size.
+
+World game coordinates → canvas pixels:
+
+```
+World space (x, z):               Canvas space (px, py):
+  x axis: left → right              px = (x - originX) / scale × 1024
+  z axis: down → up (world)         py = (1 - (z - originZ) / scale) × 1024
+                                     ↑ Y is flipped: world Z+ = canvas top
+```
+
+Map calibration values (`src/lib/types.ts`):
+
+| Map | originX | originZ | scale |
+|---|---|---|---|
+| Ambrose Valley | -370 | -370 | 900 |
+| Grand Rift | — | — | — |
+| Lockdown | — | — | — |
 
 ### Playback engine
 
-RAF loop with a `msPerRealMs` multiplier:
+The timeline uses `requestAnimationFrame` with a real-time multiplier. The entire match is compressed to 30 seconds of wall time at 1× speed.
 
 ```typescript
-// 30 seconds of wall time = full match duration at 1× speed
-const msPerRealMs = duration / (30_000 / playbackSpeed);
-// each animation frame: currentTime += delta * msPerRealMs
+// Calculated once when play starts:
+const msPerRealMs = matchDuration / (30_000 / playbackSpeed);
+
+// Each animation frame:
+const delta = timestamp - lastTimestamp;   // real elapsed ms
+currentTime += delta * msPerRealMs;        // advance match time
 ```
 
-### Match selection — richness scoring
+Speed table (30-second match example):
 
-Matches are sorted so the most interesting match is auto-selected:
+| Speed | Wall time to play full match |
+|---|---|
+| 1× | 30 seconds |
+| 2× | 15 seconds |
+| 4× | 7.5 seconds |
+| 8× | ~4 seconds |
+
+### Match ranking — richness score
+
+Matches are sorted so the most action-dense match is auto-selected when a map/date is chosen:
 
 ```
-score = kills × 10 + bots × 4 + stormDeaths × 2 + totalEvents × 0.01
+score = (kills × 10) + (bots × 4) + (stormDeaths × 2) + (totalEvents × 0.01)
 ```
 
 ### Player isolation
 
-`highlightedPlayerId` in the store drives opacity on both the canvas layer and the right panel roster. When set, non-highlighted players render at 8–12% alpha.
+Clicking a player in the roster sets `highlightedPlayerId`. The canvas `useEffect` and the roster both read this value:
+
+- **Canvas:** non-highlighted players render at 8–12% global alpha (path, dots, markers all dimmed)
+- **Roster:** non-highlighted rows render at 35% opacity
+- **Tracking banner:** appears at top of right panel with a "Clear" button
 
 ---
 
-## Deployment
+## Deployment on AWS EC2
 
-The app is a static Vite build. Deploy `dist/` to any static host:
+### Infrastructure
 
-```bash
-cd frontend/artifacts/lila-viz
-pnpm build
-# → dist/ is self-contained
+```
+Internet
+    │
+    ▼
+Route 53 (optional, DNS)
+    │
+    ▼
+EC2 Instance  [t3.micro — Amazon Linux 2023]
+    │
+    ├── Security Group
+    │   ├── Inbound: 22 (SSH, your IP only)
+    │   ├── Inbound: 80 (HTTP, 0.0.0.0/0)
+    │   └── Inbound: 443 (HTTPS, 0.0.0.0/0) ← if adding SSL
+    │
+    └── nginx
+        └── serves /var/www/lilablack/dist/ (static files)
 ```
 
-For Vercel: connect the repo, set root to `frontend/artifacts/lila-viz`, build command `pnpm build`, output `dist`.
+No load balancer, no RDS, no Lambda — the tool is entirely static files. A t3.micro ($0.01/hr) is more than sufficient.
+
+---
+
+### Step-by-step EC2 Setup
+
+#### 1. Launch EC2 instance
+
+In AWS Console:
+- AMI: **Amazon Linux 2023** (free tier eligible)
+- Instance type: `t3.micro`
+- Key pair: create or use existing `.pem` file
+- Security group — add inbound rules:
+  - SSH: port 22, source = your IP
+  - HTTP: port 80, source = 0.0.0.0/0
+
+#### 2. SSH into the instance
+
+```bash
+chmod 400 your-key.pem
+ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
+```
+
+#### 3. Install dependencies
+
+```bash
+# Update system
+sudo dnf update -y
+
+# Install nginx
+sudo dnf install nginx -y
+
+# Install Node.js 20 + pnpm
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install nodejs -y
+sudo npm install -g pnpm
+
+# Install git
+sudo dnf install git -y
+```
+
+#### 4. Clone the repo and build
+
+```bash
+# Clone
+cd /home/ec2-user
+git clone https://github.com/Wikki-1528/lilablack.git
+cd lilablack
+
+# Install frontend dependencies
+cd frontend/artifacts/lila-viz
+pnpm install
+
+# Build production bundle
+pnpm build
+# Output: frontend/artifacts/lila-viz/dist/
+```
+
+#### 5. Deploy static files
+
+```bash
+# Create web root directory
+sudo mkdir -p /var/www/lilablack
+
+# Copy the built files
+sudo cp -r dist/* /var/www/lilablack/
+
+# Set correct ownership
+sudo chown -R nginx:nginx /var/www/lilablack
+```
+
+#### 6. Configure nginx
+
+```bash
+sudo nano /etc/nginx/conf.d/lilablack.conf
+```
+
+Paste this configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name _;                          # catches all requests on port 80
+                                            # replace _ with your domain if you have one
+
+    root /var/www/lilablack;
+    index index.html;
+
+    # Serve the React SPA — all routes fall back to index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets aggressively (JS/CSS/images have content hashes)
+    location ~* \.(js|css|png|jpg|svg|ico|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Cache JSON data files for 5 minutes
+    location /data/ {
+        expires 5m;
+        add_header Cache-Control "public";
+    }
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain application/javascript application/json text/css image/svg+xml;
+    gzip_min_length 1024;
+}
+```
+
+#### 7. Start nginx
+
+```bash
+# Test config is valid
+sudo nginx -t
+
+# Start nginx and enable on boot
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# Check status
+sudo systemctl status nginx
+```
+
+#### 8. Open in browser
+
+```
+http://<EC2_PUBLIC_IP>
+```
+
+---
+
+### Updating the deployment
+
+When new match data or code changes are pushed to GitHub:
+
+```bash
+# SSH into EC2
+ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
+
+cd /home/ec2-user/lilablack
+
+# Pull latest changes
+git pull origin master
+
+# Rebuild
+cd frontend/artifacts/lila-viz
+pnpm install          # only needed if package.json changed
+pnpm build
+
+# Re-deploy
+sudo cp -r dist/* /var/www/lilablack/
+sudo systemctl reload nginx
+```
+
+---
+
+### Optional: Add HTTPS with Let's Encrypt
+
+If you point a domain at the EC2 IP:
+
+```bash
+# Install certbot
+sudo dnf install certbot python3-certbot-nginx -y
+
+# Get certificate (replace with your actual domain)
+sudo certbot --nginx -d yourdomain.com
+
+# Auto-renewal is set up automatically
+sudo systemctl status certbot-renew.timer
+```
+
+---
+
+### Cost estimate
+
+| Resource | Type | Cost |
+|---|---|---|
+| EC2 | t3.micro (on-demand) | ~$8/month |
+| Storage | 8GB gp3 EBS (default) | ~$0.60/month |
+| Data transfer | First 100GB/month free | $0 |
+| **Total** | | **~$9/month** |
+
+For an internal tool with low traffic, a t3.micro is entirely sufficient. It can serve thousands of concurrent users for a static site since nginx handles file serving with no compute per request.
+
+---
+
+## File Reference
+
+```
+lilablack/
+├── .gitignore                              excludes: node_modules, parquet data, PDF
+├── README.md                               setup + run instructions
+├── ARCHITECTURE.md                         this document
+├── INSIGHTS.md                             data-backed gameplay insights
+│
+├── Backend/
+│   ├── process_data.py                     parquet → JSON pipeline (run offline)
+│   └── requirements.txt                    pyarrow>=14.0.0, pandas>=2.0.0
+│
+└── frontend/
+    ├── package.json                        pnpm workspace root
+    ├── pnpm-workspace.yaml                 declares artifact packages
+    ├── pnpm-lock.yaml                      lockfile for reproducible installs
+    ├── tsconfig.base.json                  shared TS config
+    │
+    └── artifacts/lila-viz/                 THE DELIVERABLE APP
+        ├── index.html                      SPA entry point
+        ├── vite.config.ts                  build config (base URL, aliases)
+        ├── tsconfig.json                   app-level TS config
+        ├── package.json                    app dependencies
+        │
+        ├── public/
+        │   ├── AmbroseValley_Minimap.png   map background images
+        │   ├── GrandRift_Minimap.png
+        │   ├── Lockdown_Minimap.jpg
+        │   └── data/
+        │       ├── index.json              match catalogue (committed)
+        │       └── matches/                796 match JSON files (committed)
+        │
+        └── src/
+            ├── main.tsx                    React entry point
+            ├── App.tsx                     router (Wouter)
+            ├── index.css                   global styles, Tailwind, brand vars
+            │
+            ├── pages/
+            │   └── Dashboard.tsx           data loading, layout composition
+            │
+            ├── components/
+            │   ├── MapViewer.tsx           canvas rendering engine + HUD
+            │   ├── Sidebar.tsx             left control panel
+            │   ├── Timeline.tsx            scrubber + playback engine
+            │   └── RightPanel.tsx          roster + event feed
+            │
+            └── lib/
+                ├── store.ts                Zustand store (all UI state)
+                ├── types.ts                TypeScript interfaces + MAP_CONFIGS
+                └── utils.ts                shared utilities
+```
