@@ -52,6 +52,54 @@ export interface MapConfig {
   imageUrl: string;
 }
 
+// Analytics types
+export interface GridCell {
+  row: number; col: number;
+  ht: number;   // humanTraffic
+  bt: number;   // botTraffic
+  k: number;    // kills
+  d: number;    // deaths
+  kd: number | null; // kill/death ratio
+  lo: number;   // loot events
+  sd: number;   // storm deaths
+  hd: number;   // hot drops (first landing)
+}
+
+export interface AnalyticsSummary {
+  deadZonePercent: number;
+  avgKdRatio: number;
+  botHumanOverlap: number;
+  hottestDropCell: { row: number; col: number } | null;
+  topKillCell: { row: number; col: number; kills: number } | null;
+  stormClusters: Array<{ x: number; z: number; count: number }>;
+  totalHumanTraffic: number;
+  totalBotTraffic: number;
+  totalKills: number;
+  totalDeaths: number;
+  totalLoot: number;
+}
+
+export interface AnalyticsData {
+  matchCount: number;
+  gridSize: number;
+  cells: GridCell[];
+  summary: AnalyticsSummary;
+}
+
+export interface AiHighlightZone {
+  x: number;
+  z: number;
+  radius: number;
+  label: string;
+  color?: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  zones?: AiHighlightZone[];
+}
+
 export const MAP_CONFIGS: Record<string, MapConfig> = {
   AmbroseValley: {
     id: 'AmbroseValley',
