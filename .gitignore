@@ -1,0 +1,42 @@
+# Raw telemetry data & assignment materials
+Resourses/
+*.pdf
+
+# Node
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+.vite/
+**/.vite/
+
+# pnpm
+**/.pnpm-store/
+
+# Unused workspace artifacts
+frontend/artifacts/api-server/
+frontend/artifacts/mockup-sandbox/
+frontend/attached_assets/
+frontend/lib/
+frontend/scripts/
+
+# Environment
+.env
+.env.local
+**/.env
+**/.env.local
+
+# Replit internals
+**/.replit-artifact/
+*.replit
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
