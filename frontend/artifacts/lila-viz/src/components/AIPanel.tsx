@@ -85,6 +85,8 @@ function parseZones(text: string): AiHighlightZone[] {
   return zones.slice(0, 6); // max 6 highlights
 }
 
+const ENV_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
 export function AIPanel() {
   const {
     selectedMap, analyticsData, geminiApiKey, setGeminiApiKey,
@@ -95,6 +97,9 @@ export function AIPanel() {
   const [loading, setLoading] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyDraft, setKeyDraft] = useState('');
+
+  // Env key takes precedence; hide key management UI when env key is set
+  const hasEnvKey = !!ENV_KEY;
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const data = analyticsData[selectedMap];
@@ -161,9 +166,11 @@ Be concise (3-5 sentences max). Focus on what the Level Designer can actually ch
           <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, color: '#fff' }}>AI Insights</div>
           <div className="font-mono" style={{ fontSize: 8, color: 'rgba(255,255,255,0.35)' }}>Powered by Gemini · {selectedMap}</div>
         </div>
-        <button onClick={() => setShowKeyInput(!showKeyInput)} title="Set API Key">
-          <Key className="w-3.5 h-3.5" style={{ color: geminiApiKey ? 'rgba(255,138,0,0.6)' : 'rgba(255,255,255,0.3)' }} />
-        </button>
+        {!hasEnvKey && (
+          <button onClick={() => setShowKeyInput(!showKeyInput)} title="Set API Key">
+            <Key className="w-3.5 h-3.5" style={{ color: geminiApiKey ? 'rgba(255,138,0,0.6)' : 'rgba(255,255,255,0.3)' }} />
+          </button>
+        )}
         {aiMessages.length > 0 && (
           <button onClick={() => { clearAiMessages(); setAiHighlightZones([]); }} title="Clear chat">
             <Trash2 className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.3)' }} />
@@ -171,8 +178,8 @@ Be concise (3-5 sentences max). Focus on what the Level Designer can actually ch
         )}
       </div>
 
-      {/* API key input */}
-      {showKeyInput && (
+      {/* API key input — only shown when no env key */}
+      {!hasEnvKey && showKeyInput && (
         <div className="px-3 py-3 shrink-0" style={{ background: 'rgba(255,138,0,0.05)', borderBottom: '1px solid rgba(255,138,0,0.15)' }}>
           <div className="font-mono uppercase tracking-widest mb-1.5" style={{ fontSize: 8, color: 'rgba(255,138,0,0.7)' }}>Gemini API Key</div>
           <div className="flex gap-2">
@@ -193,13 +200,13 @@ Be concise (3-5 sentences max). Focus on what the Level Designer can actually ch
             </button>
           </div>
           <div className="font-mono mt-1.5" style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)' }}>
-            Get a free key at aistudio.google.com · stored in localStorage
+            Get a free key at aistudio.google.com · stored locally
           </div>
         </div>
       )}
 
-      {/* No key warning */}
-      {!geminiApiKey && !showKeyInput && (
+      {/* No key warning — only when no env key and no stored key */}
+      {!hasEnvKey && !geminiApiKey && !showKeyInput && (
         <div className="px-3 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="text-center">
             <Key className="w-5 h-5 mx-auto mb-2" style={{ color: 'rgba(255,138,0,0.4)' }} />

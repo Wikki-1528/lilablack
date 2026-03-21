@@ -57,24 +57,17 @@ export default function Dashboard() {
       .catch(console.error);
   }, [selectedMatchId]);
 
-  // Load analytics data when map changes or mode switches to analytics/ai
+  // Pre-load ALL 3 analytics files on startup so map switching is instant
   useEffect(() => {
-    if (appMode === 'replay') return;
-    if (analyticsData[selectedMap]) return; // already cached
-    fetch(BASE + 'data/analytics/' + selectedMap + '.json')
-      .then((r) => r.json())
-      .then((data: AnalyticsData) => setAnalyticsData(selectedMap, data))
-      .catch(console.error);
-  }, [appMode, selectedMap]);
-
-  // Pre-load analytics for current map even in replay mode (background)
-  useEffect(() => {
-    if (analyticsData[selectedMap]) return;
-    fetch(BASE + 'data/analytics/' + selectedMap + '.json')
-      .then((r) => r.json())
-      .then((data: AnalyticsData) => setAnalyticsData(selectedMap, data))
-      .catch(() => {});
-  }, [selectedMap]);
+    const maps = ['AmbroseValley', 'GrandRift', 'Lockdown'];
+    maps.forEach((mapId) => {
+      if (analyticsData[mapId]) return;
+      fetch(BASE + 'data/analytics/' + mapId + '.json')
+        .then((r) => r.json())
+        .then((data: AnalyticsData) => setAnalyticsData(mapId, data))
+        .catch(() => {});
+    });
+  }, []);
 
   const ContextPanel = () => {
     if (appMode === 'replay')    return <RosterPanel />;

@@ -91,7 +91,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
   selectedDates: [...ALL_DATES],
   aiMessages: [],
   aiHighlightZones: [],
-  geminiApiKey: typeof localStorage !== 'undefined' ? (localStorage.getItem('gemini_api_key') ?? '') : '',
+  geminiApiKey: (import.meta.env.VITE_GEMINI_API_KEY as string) || (typeof localStorage !== 'undefined' ? (localStorage.getItem('gemini_api_key') ?? '') : ''),
   currentTime: 0,
   minTime: 0,
   maxTime: 0,
