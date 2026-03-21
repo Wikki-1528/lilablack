@@ -1,6 +1,6 @@
 import React from 'react';
 import { useVisualizerStore, type AnalyticsOverlay } from '@/lib/store';
-import { Activity } from 'lucide-react';
+import { Activity, Info } from 'lucide-react';
 
 const OVERLAYS: { id: AnalyticsOverlay; label: string; desc: string; color: string }[] = [
   { id: 'traffic',   label: 'Human Traffic',    desc: 'Where players spend the most time', color: '#60a5fa' },
@@ -13,11 +13,9 @@ const OVERLAYS: { id: AnalyticsOverlay; label: string; desc: string; color: stri
 ];
 
 export function AnalyticsPanel() {
-  const { analyticsData, selectedMap, analyticsOverlay, setAnalyticsOverlay, selectedDates, toggleSelectedDate } = useVisualizerStore();
+  const { analyticsData, selectedMap, analyticsOverlay, setAnalyticsOverlay } = useVisualizerStore();
   const data = analyticsData[selectedMap];
   const summary = data?.summary;
-
-  const ALL_DATES = ['February_10', 'February_11', 'February_12', 'February_13', 'February_14'];
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: '#08070c' }}>
@@ -29,7 +27,7 @@ export function AnalyticsPanel() {
         </div>
         {data && (
           <div className="font-mono mt-0.5" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>
-            {data.matchCount} matches · {selectedDates.length} date{selectedDates.length !== 1 ? 's' : ''} selected
+            {data.matchCount} matches · Feb 10–14 · all dates
           </div>
         )}
       </div>
@@ -104,24 +102,13 @@ export function AnalyticsPanel() {
         </div>
       )}
 
-      {/* Date filter */}
+      {/* Data scope note */}
       <div className="px-3 py-3">
-        <div className="font-mono uppercase tracking-widest mb-2" style={{ fontSize: 8, color: 'rgba(255,138,0,0.6)' }}>Date Filter</div>
-        <div className="flex gap-1 flex-wrap">
-          {ALL_DATES.map((d) => {
-            const active = selectedDates.includes(d);
-            const day = d.replace('February_', '');
-            return (
-              <button
-                key={d}
-                onClick={() => toggleSelectedDate(d)}
-                className="w-9 h-9 font-mono transition-all"
-                style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 11, background: active ? 'rgba(255,138,0,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? 'rgba(255,138,0,0.45)' : 'rgba(255,255,255,0.08)'}`, color: active ? '#ff8a00' : 'rgba(255,255,255,0.35)' }}
-              >
-                {day}
-              </button>
-            );
-          })}
+        <div className="flex items-start gap-2 px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <Info className="w-3 h-3 shrink-0 mt-0.5" style={{ color: 'rgba(255,138,0,0.5)' }} />
+          <div className="font-mono" style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6 }}>
+            Analytics aggregate all 5 days (Feb 10–14). Use the date picker in the top bar to filter Replay mode by day.
+          </div>
         </div>
       </div>
 

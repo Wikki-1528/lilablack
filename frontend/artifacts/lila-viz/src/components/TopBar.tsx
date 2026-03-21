@@ -164,10 +164,13 @@ export function TopBar() {
 
   const filteredMatches = (indexData?.matches.filter(
     (m) => m.map === selectedMap && m.date === selectedDate
-  ) ?? []).slice().sort((a, b) =>
-    (b.kills * 10 + b.bots * 4 + b.stormDeaths * 2 + b.totalEvents * 0.01) -
-    (a.kills * 10 + a.bots * 4 + a.stormDeaths * 2 + a.totalEvents * 0.01)
-  );
+  ) ?? []).slice().sort((a, b) => {
+    // Human matches always rank above bot-only matches in the dropdown
+    const hA = a.humans > 0 ? 1 : 0, hB = b.humans > 0 ? 1 : 0;
+    if (hB !== hA) return hB - hA;
+    return (b.kills * 10 + b.stormDeaths * 2 + b.totalEvents * 0.01) -
+           (a.kills * 10 + a.stormDeaths * 2 + a.totalEvents * 0.01);
+  });
 
   const selectedDay = DATE_TO_DAY[selectedDate];
 

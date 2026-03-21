@@ -28,7 +28,12 @@ export default function Dashboard() {
         setIndexData(data);
         const richest = data.matches
           .filter((m) => m.map === 'AmbroseValley' && m.date === 'February_10')
-          .sort((a, b) => (b.kills * 10 + b.bots * 4 + b.totalEvents * 0.01) - (a.kills * 10 + a.bots * 4 + a.totalEvents * 0.01))[0];
+          .sort((a, b) => {
+            // Human matches always rank above bot-only matches
+            const hA = a.humans > 0 ? 1 : 0, hB = b.humans > 0 ? 1 : 0;
+            if (hB !== hA) return hB - hA;
+            return (b.kills * 10 + b.totalEvents * 0.01) - (a.kills * 10 + a.totalEvents * 0.01);
+          })[0];
         if (richest) setSelectedMatchId(richest.id);
       })
       .catch(console.error);
@@ -39,7 +44,11 @@ export default function Dashboard() {
     if (!indexData) return;
     const richest = indexData.matches
       .filter((m) => m.map === selectedMap && m.date === selectedDate)
-      .sort((a, b) => (b.kills * 10 + b.bots * 4 + b.totalEvents * 0.01) - (a.kills * 10 + a.bots * 4 + a.totalEvents * 0.01))[0];
+      .sort((a, b) => {
+        const hA = a.humans > 0 ? 1 : 0, hB = b.humans > 0 ? 1 : 0;
+        if (hB !== hA) return hB - hA;
+        return (b.kills * 10 + b.totalEvents * 0.01) - (a.kills * 10 + a.totalEvents * 0.01);
+      })[0];
     if (richest) setSelectedMatchId(richest.id);
     else setSelectedMatchId(null);
   }, [selectedMap, selectedDate, indexData]);
