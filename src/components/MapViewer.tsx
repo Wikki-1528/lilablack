@@ -177,10 +177,9 @@ export function MapViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const pulseRef = useRef(0);
   const rafRef = useRef<number>(0);
-  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [crosshair, setCrosshair] = useState({ x: 0.5, y: 0.5 });
   const [worldPos, setWorldPos] = useState({ x: 0, z: 0 });
-  const [showCoordTooltip, setShowCoordTooltip] = useState(false);
+  const [onMap, setOnMap] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState<{
     type: string; icon: string; userId: string; ts: number; color: string; kills: number; deaths: number;
   } | null>(null);
@@ -259,10 +258,7 @@ export function MapViewer() {
       x: mapCfg.originX + rx * mapCfg.scale,
       z: mapCfg.originZ + (1 - ry) * mapCfg.scale,
     });
-    // Reset 2-second tooltip timer on every move
-    setShowCoordTooltip(false);
-    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-    tooltipTimerRef.current = setTimeout(() => setShowCoordTooltip(true), 500);
+    setOnMap(true);
     // Event hover detection (replay mode only)
     if (appModeRef.current === 'replay') {
       const HIT = 0.022;
@@ -285,8 +281,7 @@ export function MapViewer() {
   }, [mapCfg]);
 
   const handleMouseLeave = useCallback(() => {
-    setShowCoordTooltip(false);
-    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    setOnMap(false);
     setHoveredEvent(null);
   }, []);
 
@@ -542,8 +537,8 @@ export function MapViewer() {
         <div className="absolute h-full" style={{ left: `${crosshair.x * 100}%`, width: 1, background: 'rgba(245,158,11,0.1)' }} />
       </div>
 
-      {/* Unified map tooltip — event card takes priority; coord-only card when cursor is still */}
-      {(hoveredEvent || showCoordTooltip) && (
+      {/* Unified map tooltip — event card takes priority over coord card */}
+      {(hoveredEvent || onMap) && (
         <div
           className="absolute pointer-events-none"
           style={{
