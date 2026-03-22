@@ -622,31 +622,90 @@ export function MapViewer() {
         )}
       </div>
 
-      {/* Top-right HUD — replay only + zoom badge */}
-      <div className="absolute top-6 right-14 text-right flex flex-col items-end gap-1.5" style={{ zIndex: 21 }}>
-        {appMode === 'replay' && matchData && (
-          <div className="font-mono pointer-events-none" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+      {/* Top-right HUD — replay only */}
+      {appMode === 'replay' && matchData && (
+        <div className="absolute top-6 right-14 pointer-events-none text-right" style={{ zIndex: 21 }}>
+          <div className="font-mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
             <span style={{ color: 'rgba(96,165,250,0.8)', fontWeight: 700 }}>{matchData.players.filter(p => !p.isBot).length}H</span>
             <span style={{ color: 'rgba(255,255,255,0.25)' }}> · </span>
             <span style={{ color: 'rgba(255,138,0,0.8)', fontWeight: 700 }}>{matchData.players.filter(p => p.isBot).length}B</span>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Zoom controls — always visible, bottom-right */}
+      <div
+        className="absolute bottom-5 right-4 flex flex-col items-center"
+        style={{ zIndex: 22, gap: 1 }}
+      >
+        <button
+          onClick={() => {
+            const newZoom = Math.min(5, zoomRef.current * 1.3);
+            const maxPan = (newZoom - 1) / (2 * newZoom);
+            const p = panRef.current;
+            setPan({ x: Math.max(-maxPan, Math.min(maxPan, p.x)), y: Math.max(-maxPan, Math.min(maxPan, p.y)) });
+            setZoom(newZoom);
+          }}
+          title="Zoom in"
+          style={{
+            width: 24, height: 24,
+            background: 'rgba(8,7,12,0.85)',
+            border: '1px solid rgba(255,138,0,0.25)',
+            color: 'rgba(255,138,0,0.8)',
+            fontSize: 14, lineHeight: 1,
+            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >+</button>
+        <div
+          className="font-mono"
+          style={{
+            width: 24, height: 20,
+            background: 'rgba(8,7,12,0.85)',
+            border: '1px solid rgba(255,138,0,0.15)',
+            borderTop: 'none', borderBottom: 'none',
+            color: zoom > 1 ? '#ff8a00' : 'rgba(255,255,255,0.25)',
+            fontSize: 8, letterSpacing: '0.04em',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >{zoom.toFixed(1)}×</div>
+        <button
+          onClick={() => {
+            if (zoomRef.current <= 1) return;
+            const newZoom = Math.max(1, zoomRef.current / 1.3);
+            if (newZoom <= 1) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
+            const maxPan = (newZoom - 1) / (2 * newZoom);
+            const p = panRef.current;
+            setPan({ x: Math.max(-maxPan, Math.min(maxPan, p.x)), y: Math.max(-maxPan, Math.min(maxPan, p.y)) });
+            setZoom(newZoom);
+          }}
+          title="Zoom out"
+          style={{
+            width: 24, height: 24,
+            background: 'rgba(8,7,12,0.85)',
+            border: '1px solid rgba(255,138,0,0.25)',
+            color: zoom > 1 ? 'rgba(255,138,0,0.8)' : 'rgba(255,255,255,0.2)',
+            fontSize: 14, lineHeight: 1,
+            cursor: zoom > 1 ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >−</button>
         {zoom > 1 && (
           <button
             onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
-            className="font-mono flex items-center gap-1.5 px-2 py-1 transition-opacity hover:opacity-100"
+            title="Reset zoom"
+            className="font-mono"
             style={{
-              fontSize: 9,
-              color: '#ff8a00',
+              width: 24, height: 16,
               background: 'rgba(255,138,0,0.1)',
               border: '1px solid rgba(255,138,0,0.3)',
-              opacity: 0.85,
-              letterSpacing: '0.08em',
+              borderTop: 'none',
+              color: '#ff8a00',
+              fontSize: 7, letterSpacing: '0.06em',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            title="Reset zoom"
-          >
-            {zoom.toFixed(1)}× RESET
-          </button>
+          >FIT</button>
         )}
       </div>
 
