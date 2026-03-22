@@ -633,10 +633,10 @@ export function MapViewer() {
         </div>
       )}
 
-      {/* Zoom controls — always visible, bottom-right */}
+      {/* Zoom controls — always visible, bottom-right (offset 64px to clear the 48px RightToolbar) */}
       <div
-        className="absolute bottom-5 right-4 flex flex-col items-center"
-        style={{ zIndex: 22, gap: 1 }}
+        className="absolute bottom-5 flex flex-col items-center"
+        style={{ zIndex: 22, right: 64, gap: 1 }}
       >
         <button
           onClick={() => {
