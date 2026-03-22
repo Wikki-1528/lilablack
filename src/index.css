@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-primary: hsl(var(--primary));
+  --color-secondary: hsl(var(--secondary));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-destructive: hsl(var(--destructive));
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+:root {
+  /* LILA BLACK Brand Theme */
+  --background: 240 12% 5%;       /* #080710 deep almost-black */
+  --foreground: 38 20% 92%;       /* warm white */
+
+  --card: 240 10% 7%;
+  --card-foreground: 38 20% 92%;
+
+  --primary: 32 100% 52%;         /* #ff8a00 LILA orange */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 8% 12%;
+  --secondary-foreground: 38 15% 70%;
+
+  --muted: 240 8% 10%;
+  --muted-foreground: 240 5% 45%;
+
+  --accent: 42 100% 60%;          /* #ffb833 warm gold */
+  --accent-foreground: 240 12% 5%;
+
+  --destructive: 0 84% 58%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 32 30% 14%;
+  --input: 32 15% 10%;
+  --ring: 32 100% 52%;
+
+  --radius: 0.375rem;
+}
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    border-color: hsl(var(--border));
+  }
+  body {
+    @apply antialiased overflow-hidden;
+    font-family: 'Inter', sans-serif;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 138, 0, 0.25); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 138, 0, 0.5); }
+
+  /* Brand glow */
+  .lila-glow {
+    box-shadow: 0 0 20px rgba(255, 138, 0, 0.15), 0 0 40px rgba(255, 138, 0, 0.05);
+  }
+
+  .text-lila {
+    color: #ff8a00;
+    text-shadow: 0 0 20px rgba(255, 138, 0, 0.5);
+  }
+
+  .border-lila {
+    border-color: rgba(255, 138, 0, 0.35);
+  }
+
+  /* Subtle grid for the body */
+  .lila-grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(255, 138, 0, 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 138, 0, 0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Scanlines overlay for map */
+  .scanlines {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.07) 2px,
+      rgba(0, 0, 0, 0.07) 3px
+    );
+    background-size: 100% 3px;
+    pointer-events: none;
+  }
+
+  /* Map vignette */
+  .map-vignette {
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.65) 100%);
+    pointer-events: none;
+  }
+
+  /* Angular clip — top-right + bottom-left corner cuts */
+  .clip-angular {
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  /* Game panel — dark semi-transparent with 1px border */
+  .game-panel {
+    background: rgba(9, 8, 13, 0.92);
+    border: 1px solid rgba(255, 138, 0, 0.12);
+    backdrop-filter: blur(8px);
+  }
+
+  /* Rajdhani heading */
+  .font-display {
+    font-family: 'Rajdhani', sans-serif;
+  }
+
+  /* ── Interactive element hover states (replaces onMouseEnter/Leave mutations) ── */
+
+  /* Right toolbar icon buttons */
+  .toolbar-btn { color: rgba(255, 255, 255, 0.35); }
+  .toolbar-btn[data-active="true"] { color: #ff8a00; }
+  .toolbar-btn:not([data-active="true"]):hover { color: rgba(255, 255, 255, 0.7); }
+
+  /* TopBar mode tabs */
+  .mode-tab { color: rgba(255, 255, 255, 0.4); }
+  .mode-tab.active { color: #ff8a00; }
+  .mode-tab:not(.active):hover { color: rgba(255, 255, 255, 0.7); }
+
+  /* Dropdown option items (map selectors) */
+  .dropdown-option { background: transparent; }
+  .dropdown-option:hover { background: rgba(255, 255, 255, 0.04); }
+
+  /* AI suggested question buttons */
+  .suggest-btn {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .suggest-btn:hover {
+    border-color: rgba(255, 138, 0, 0.3);
+    color: #fff;
+  }
+}

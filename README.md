@@ -1,150 +1,76 @@
 # LILA BLACK — Player Journey Visualizer
 
-An internal analytics tool for Level Designers at Lila Games to explore player behavior on LILA BLACK maps using real match telemetry data.
+A map analytics tool for Level Designers to explore player behavior, combat patterns, and loot distribution across LILA BLACK's three maps using real match telemetry.
 
-![LILA BLACK Visualizer](frontend/artifacts/lila-viz/public/opengraph.jpg)
+---
+
+## Live Demo
+
+**[http://\<EC2-IP-HERE\>](http://localhost)** ← will be updated after deployment
 
 ---
 
 ## What It Does
 
-| Feature | Description |
-|---|---|
-| **Replay mode** | Watch a match unfold — player paths, kills, deaths, loot, storm events on minimap |
-| **Timeline** | Scrub or play back at 1×/2×/4×/8× speed with live kill feed |
-| **Analytics mode** | 7 heatmap overlays (traffic, K/D ratio, dead zones, loot, hot drops, bot vs human, storm) aggregated across all 796 matches |
-| **AI Insights mode** | Ask natural-language questions; Gemini highlights relevant map zones |
-| **Player tracking** | Click any player in the roster to isolate their individual journey |
-| **Match browser** | Filtered by map + date; human matches always ranked first |
+| Mode | Description |
+|------|-------------|
+| **Replay** | Watch any match unfold — player paths, kills, deaths, loot and storm events rendered on the minimap with a playback timeline (1×/2×/4×/8×) |
+| **Analytics** | 7 heatmap overlays aggregated across all 796 matches — traffic, K/D ratio, dead zones, loot density, hot drops, bot vs human, storm clusters |
+| **AI Insights** | Ask natural-language questions about the map; the AI highlights relevant zones directly on the minimap |
 
-## Dataset
-
-| Map | Matches |
-|---|---|
-| Ambrose Valley | 566 |
-| Lockdown | 171 |
-| Grand Rift | 59 |
-| **Total** | **796 matches · 89,016 events · 245 players** |
+**Dataset:** 796 matches · 89,016 events · 245 human players · 3 maps (Feb 10–14, 2026)
 
 ---
 
-## Quickstart (Local)
+## Run Locally
 
-### Prerequisites
-
-- Node.js 18+
-- pnpm 9+ → `npm i -g pnpm`
-- Python 3.9+ (only needed to re-run the data pipeline)
-
-### Run the app
-
-The processed JSON data is already committed to this repo. You only need to build and serve the frontend:
+**Prerequisites:** Node.js 18+, npm (or pnpm: `npm i -g pnpm`)
 
 ```bash
 git clone https://github.com/Wikki-1528/lilablack.git
-cd lilablack/frontend/artifacts/lila-viz
-
-pnpm install
-pnpm dev
+cd lilablack
+npm install
+npm run dev
 ```
 
 Open **http://localhost:5173**
 
-> **Windows + Git Bash:** use `MSYS_NO_PATHCONV=1 pnpm dev`
+> The app works immediately — processed JSON data is already committed to the repo. No backend, no database, no env vars required to explore Replay and Analytics modes.
 
-### Re-run the data pipeline (optional)
+> **AI Insights mode** uses Groq (Llama 3.3 70B) or Gemini 2.0 Flash. Without an API key it runs in demo mode — pre-computed responses from real match data. To enable live AI, copy `.env.example` to `.env` and add your key:
+> ```
+> VITE_GROQ_API_KEY=your_key_here
+> # or
+> VITE_GEMINI_API_KEY=your_key_here
+> ```
 
-Only needed if you have new parquet telemetry files:
+---
+
+## Re-run the Data Pipeline (optional)
+
+Only needed if you have new parquet telemetry files. Python 3.9+ required.
 
 ```bash
-cd Backend
+cd pipeline
 pip install -r requirements.txt
 python process_data.py
 ```
 
-Reads from `../Resourses/February_XX/*.parquet` → writes to `frontend/artifacts/lila-viz/public/data/`
+Reads from `../Resourses/February_XX/` → writes to `../public/data/`
 
 ---
 
-## Deploy to AWS EC2
+## Tech Stack
 
-### 1. Launch EC2 instance
-
-- AMI: **Amazon Linux 2023**
-- Type: `t3.micro` (~$8/month)
-- Security group inbound rules:
-  - Port 22 (SSH) — your IP only
-  - Port 80 (HTTP) — 0.0.0.0/0
-
-### 2. Install dependencies on EC2
-
-```bash
-ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
-
-sudo dnf update -y
-sudo dnf install nginx git -y
-
-# Node.js 20
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install nodejs -y
-sudo npm install -g pnpm
-```
-
-### 3. Build and deploy
-
-```bash
-git clone https://github.com/Wikki-1528/lilablack.git
-cd lilablack/frontend/artifacts/lila-viz
-
-pnpm install
-pnpm build
-
-sudo mkdir -p /var/www/lilablack
-sudo cp -r dist/* /var/www/lilablack/
-sudo chown -R nginx:nginx /var/www/lilablack
-```
-
-### 4. Configure nginx
-
-```bash
-sudo nano /etc/nginx/conf.d/lilablack.conf
-```
-
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    root /var/www/lilablack;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location ~* \.(js|css|png|jpg|svg|ico)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location /data/ {
-        expires 5m;
-        add_header Cache-Control "public";
-    }
-
-    gzip on;
-    gzip_types application/javascript application/json text/css image/svg+xml;
-}
-```
-
-```bash
-sudo nginx -t
-sudo systemctl start nginx && sudo systemctl enable nginx
-```
-
-Open **http://\<EC2_PUBLIC_IP\>**
-
-> Full EC2 setup details, HTTPS/SSL instructions, and update workflow are in [ARCHITECTURE.md](ARCHITECTURE.md).
+| Layer | Tech |
+|-------|------|
+| Data pipeline | Python 3, pandas, PyArrow |
+| Frontend | React 19, TypeScript, Vite |
+| State | Zustand 5 |
+| Map rendering | HTML5 Canvas (1024×1024) |
+| Styling | Tailwind CSS v4 |
+| AI | Groq (Llama 3.3 70B) / Gemini 2.0 Flash fallback |
+| Hosting | AWS EC2 (t3.micro) + Nginx, static files |
 
 ---
 
@@ -153,28 +79,34 @@ Open **http://\<EC2_PUBLIC_IP\>**
 ```
 lilablack/
 ├── README.md
-├── ARCHITECTURE.md          system design + EC2 deployment guide
-├── INSIGHTS.md              3 data-backed gameplay insights
+├── ARCHITECTURE.md                  ← tech decisions, data flow, coordinate mapping
+├── INSIGHTS.md                      ← 3 data-backed gameplay insights
+├── package.json                     ← frontend deps (React 19, Vite 7, Tailwind 4)
+├── vite.config.ts
+├── tsconfig.json
+├── index.html
+├── .env.example                     ← copy to .env and add AI key (optional)
 │
-├── Backend/
-│   ├── process_data.py      parquet → JSON pipeline
-│   └── requirements.txt
+├── src/
+│   ├── pages/                       Dashboard · AiModePage
+│   ├── components/                  TopBar · MapViewer · Timeline · RosterPanel
+│   │                                AnalyticsPanel · AIPanel · KillFeed
+│   ├── hooks/                       useAiChat
+│   └── lib/                         store · types · colors · constants · aiGraph · aiApi
 │
-└── frontend/
-    └── artifacts/lila-viz/
-        ├── src/
-        │   ├── components/  TopBar · MapViewer · Timeline · RosterPanel
-        │   │                AnalyticsPanel · AIPanel · KillFeed
-        │   ├── lib/         Zustand store · types · MAP_CONFIGS
-        │   └── pages/       Dashboard (data loading + layout)
-        └── public/data/     index.json · 796 match JSONs · 3 analytics grids
+├── public/data/
+│   ├── index.json                   796 match summaries (152 KB)
+│   ├── matches/                     per-match events, 796 files (~8 MB total)
+│   └── analytics/                   48×48 spatial grids, 3 maps (~174 KB each)
+│
+└── pipeline/
+    ├── process_data.py              ← parquet → JSON pipeline (run once)
+    └── requirements.txt
 ```
 
 ---
 
-## Deliverables
+## Docs
 
-- [x] Player Journey Visualization Tool
-- [x] Data pipeline (`Backend/process_data.py`)
-- [x] Architecture + EC2 deployment guide (`ARCHITECTURE.md`)
-- [x] Gameplay insights (`INSIGHTS.md`)
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — stack choices, data pipeline, coordinate mapping, tradeoffs, EC2 deployment steps
+- **[INSIGHTS.md](INSIGHTS.md)** — 3 gameplay insights derived from the telemetry data with design recommendations

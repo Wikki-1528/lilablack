@@ -4,33 +4,19 @@ Resourses/
 
 # Node
 node_modules/
-**/node_modules/
 
 # Build output
 dist/
-**/dist/
 .vite/
-**/.vite/
-
-# pnpm
-**/.pnpm-store/
-
-# Unused workspace artifacts
-frontend/artifacts/api-server/
-frontend/artifacts/mockup-sandbox/
-frontend/attached_assets/
-frontend/lib/
-frontend/scripts/
 
 # Environment
 .env
 .env.local
-**/.env
-**/.env.local
 
-# Replit internals
-**/.replit-artifact/
-*.replit
+# Python
+__pycache__/
+*.pyc
+*.pyo
 
 # OS
 .DS_Store
