@@ -160,9 +160,38 @@ export function PlayersPanel() {
       {/* List */}
       <div className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1">
 
-        {/* ── Bot section ── */}
+        {/* ── Human section (first) ── */}
+        {showHumans && sortedHumans.length > 0 && (
+          <div className="font-mono uppercase mb-0.5" style={{ fontSize: 8, letterSpacing: '0.1em', color: 'rgba(96,165,250,0.4)', paddingLeft: 2 }}>
+            Human Players
+          </div>
+        )}
+        {showHumans && sortedHumans.map((player) => {
+          const color = colorMap.get(player.userId) ?? '#60a5fa';
+          const statusCfg = STATUS_CONFIG[player.status];
+          const isSelected = highlightedPlayerId === player.userId;
+          const isDimmed = highlightedPlayerId !== null && !isSelected;
+          return (
+            <PlayerCard
+              key={player.userId}
+              player={player}
+              color={color}
+              statusCfg={statusCfg}
+              isSelected={isSelected}
+              isDimmed={isDimmed}
+              onClick={() => setHighlightedPlayer(isSelected ? null : player.userId)}
+            />
+          );
+        })}
+
+        {/* ── Bot section (after humans) ── */}
         {showBots && botSummary && (
           <>
+            {/* Divider before bots */}
+            <div className="font-mono uppercase mt-2 mb-0.5" style={{ fontSize: 8, letterSpacing: '0.1em', color: 'rgba(255,138,0,0.4)', paddingLeft: 2 }}>
+              Bots
+            </div>
+
             {/* Bot summary card */}
             <div
               style={{
@@ -190,7 +219,7 @@ export function PlayersPanel() {
               )}
             </div>
 
-            {/* Interesting bots individually */}
+            {/* Notable bots individually */}
             {interestingBots.length > 0 && (
               <div className="font-mono uppercase mb-0.5" style={{ fontSize: 8, letterSpacing: '0.1em', color: 'rgba(255,138,0,0.4)', paddingLeft: 2 }}>
                 Notable Bots
@@ -212,34 +241,8 @@ export function PlayersPanel() {
                 />
               );
             })}
-
-            {/* Divider before humans */}
-            {showHumans && sortedHumans.length > 0 && (
-              <div className="font-mono uppercase mt-2 mb-0.5" style={{ fontSize: 8, letterSpacing: '0.1em', color: 'rgba(96,165,250,0.4)', paddingLeft: 2 }}>
-                Human Players
-              </div>
-            )}
           </>
         )}
-
-        {/* ── Human section ── */}
-        {showHumans && sortedHumans.map((player) => {
-          const color = colorMap.get(player.userId) ?? '#60a5fa';
-          const statusCfg = STATUS_CONFIG[player.status];
-          const isSelected = highlightedPlayerId === player.userId;
-          const isDimmed = highlightedPlayerId !== null && !isSelected;
-          return (
-            <PlayerCard
-              key={player.userId}
-              player={player}
-              color={color}
-              statusCfg={statusCfg}
-              isSelected={isSelected}
-              isDimmed={isDimmed}
-              onClick={() => setHighlightedPlayer(isSelected ? null : player.userId)}
-            />
-          );
-        })}
 
         {sortedHumans.length === 0 && !botSummary && (
           <div className="flex flex-col items-center justify-center py-10 gap-1">
