@@ -56,14 +56,18 @@ export function StatsPanel() {
           <div className="font-mono uppercase tracking-widest mb-3" style={{ fontSize: 8, color: 'rgba(255,255,255,0.28)' }}>
             This Match
           </div>
+          {(() => {
+            const inferredBots = Math.max(matchIndex.bots, matchIndex.botKills ?? 0);
+            const botsInferred = inferredBots > matchIndex.bots;
+            return (
           <div className="grid grid-cols-3 gap-1">
             {[
-              { label: 'Humans',    value: matchIndex.humans,                         color: '#60a5fa' },
-              { label: 'Bot Kills', value: matchIndex.botKills ?? 0,                   color: '#ff8a00' },
-              { label: 'Kills',     value: matchIndex.kills,                          color: '#ef4444' },
-              { label: 'Deaths',    value: matchIndex.deaths,                         color: '#f97316' },
-              { label: 'Loot',      value: matchIndex.loots,                          color: '#22c55e' },
-              { label: 'Storm',     value: matchIndex.stormDeaths,                    color: '#a855f7' },
+              { label: 'Humans',    value: matchIndex.humans,   color: '#60a5fa', sub: null },
+              { label: 'Bots',      value: botsInferred ? `~${inferredBots}` : inferredBots, color: '#ff8a00', sub: botsInferred ? `${matchIndex.bots} tracked` : null },
+              { label: 'Bot Kills', value: matchIndex.botKills ?? 0, color: '#f97316', sub: null },
+              { label: 'Kills',     value: matchIndex.kills,    color: '#ef4444', sub: null },
+              { label: 'Loot',      value: matchIndex.loots,    color: '#22c55e', sub: null },
+              { label: 'Storm',     value: matchIndex.stormDeaths, color: '#a855f7', sub: null },
             ].map((s) => (
               <div
                 key={s.label}
@@ -76,8 +80,16 @@ export function StatsPanel() {
                 <div className="font-mono uppercase tracking-wider mt-0.5" style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)' }}>
                   {s.label}
                 </div>
+                {s.sub && (
+                  <div className="font-mono mt-0.5" style={{ fontSize: 6, color: 'rgba(255,255,255,0.2)' }}>
+                    {s.sub}
+                  </div>
+                )}
               </div>
             ))}
+          </div>
+            );
+          })()}
           </div>
 
           {/* Duration + coverage row */}

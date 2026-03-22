@@ -309,12 +309,12 @@ export function TopBar() {
           >
             <option value="" style={{ background: '#0d0c14', color: 'rgba(255,255,255,0.4)' }}>— select —</option>
             {filteredMatches.map((m) => {
+              const inferredBots = Math.max(m.bots, m.botKills ?? 0);
               const tags = [
-                `${m.totalEvents}ev`,
                 `${m.humans}H`,
-                m.bots > 0 ? `${m.bots}B` : null,
+                inferredBots > 0 ? `~${inferredBots}B` : null,
                 m.kills > 0 ? `${m.kills}K` : null,
-                m.stormDeaths > 0 ? `${m.stormDeaths}⚡` : null,
+                `${m.totalEvents}ev`,
               ].filter(Boolean).join(' · ');
               return (
                 <option key={m.id} value={m.id} style={{ background: '#0d0c14', color: 'rgba(255,255,255,0.85)' }}>
