@@ -1,8 +1,65 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useVisualizerStore } from '@/lib/store';
 import { worldToPixel, HUMAN_COLORS, MAP_CONFIGS, getPlayerStatus } from '@/lib/types';
-import type { GridCell, AiHighlightZone } from '@/lib/types';
+import type { GridCell, AiHighlightZone, MatchData, AnalyticsData } from '@/lib/types';
 import { CANVAS_SIZE, BOT_DASH_PATTERN } from '@/lib/constants';
+
+// Compute per-match analytics grid from raw match event data
+function computeMatchAnalytics(matchData: MatchData, mapId: string, gridSize = 48): AnalyticsData {
+  const cfg = MAP_CONFIGS[mapId];
+  const cellMap = new Map<number, GridCell>();
+
+  const getCell = (x: number, z: number) => {
+    if (!cfg) return null;
+    const u = (x - cfg.originX) / cfg.scale;
+    const v = (z - cfg.originZ) / cfg.scale;
+    if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
+    const col = Math.floor(u * gridSize);
+    const row = Math.floor((1 - v) * gridSize);
+    const key = row * gridSize + col;
+    if (!cellMap.has(key)) cellMap.set(key, { row, col, ht: 0, bt: 0, k: 0, d: 0, kd: null, lo: 0, sd: 0, hd: 0 });
+    return cellMap.get(key)!;
+  };
+
+  for (const player of matchData.players) {
+    let firstTs = Infinity, firstX = 0, firstZ = 0, hasFirst = false;
+    for (const e of player.events) {
+      const cell = getCell(e.x, e.z);
+      if (!cell) continue;
+      if (player.isBot) {
+        if (e.event === 'BotPosition') cell.bt++;
+      } else {
+        if (e.event === 'Position') {
+          cell.ht++;
+          if (e.ts < firstTs) { firstTs = e.ts; firstX = e.x; firstZ = e.z; hasFirst = true; }
+        }
+        if (e.event === 'Kill' || e.event === 'BotKill') cell.k++;
+        if (e.event === 'Killed' || e.event === 'BotKilled') cell.d++;
+        if (e.event === 'KilledByStorm') { cell.d++; cell.sd++; }
+        if (e.event === 'Loot') cell.lo++;
+      }
+    }
+    if (hasFirst) { const c = getCell(firstX, firstZ); if (c) c.hd++; }
+  }
+
+  const cells = Array.from(cellMap.values());
+  cells.forEach((c) => { c.kd = c.d > 0 ? c.k / c.d : (c.k > 0 ? 2.0 : null); });
+
+  return {
+    matchCount: 1,
+    gridSize,
+    cells,
+    summary: {
+      deadZonePercent: 0, avgKdRatio: 1, botHumanOverlap: 0,
+      hottestDropCell: null, topKillCell: null, stormClusters: [],
+      totalHumanTraffic: cells.reduce((s, c) => s + c.ht, 0),
+      totalBotTraffic:   cells.reduce((s, c) => s + c.bt, 0),
+      totalKills:        cells.reduce((s, c) => s + c.k, 0),
+      totalDeaths:       cells.reduce((s, c) => s + c.d, 0),
+      totalLoot:         cells.reduce((s, c) => s + c.lo, 0),
+    },
+  };
+}
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -182,6 +239,10 @@ export function MapViewer() {
   const radarAngleRef = useRef(0);
   const acquiredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [radarAcquired, setRadarAcquired] = useState(false);
+  type RevealPhase = 'hidden' | 'revealing' | 'visible';
+  const [revealPhase, setRevealPhase] = useState<RevealPhase>('visible');
+  const revealPhaseRef = useRef<RevealPhase>('visible');
+  revealPhaseRef.current = revealPhase;
   const [crosshair, setCrosshair] = useState({ x: 0.5, y: 0.5 });
   const [worldPos, setWorldPos] = useState({ x: 0, z: 0 });
   const [onMap, setOnMap] = useState(false);
@@ -209,6 +270,12 @@ export function MapViewer() {
   } = useVisualizerStore();
 
   const mapCfg = MAP_CONFIGS[selectedMap] ?? MAP_CONFIGS.AmbroseValley;
+
+  // Per-match analytics — computed from raw match events; used in analytics mode
+  const matchAnalytics = useMemo<AnalyticsData | null>(() => {
+    if (!matchData || matchData.mapId !== selectedMap) return null;
+    return computeMatchAnalytics(matchData, selectedMap);
+  }, [matchData, selectedMap]);
 
   // Refs so handleMouseMove stays stable across currentTime/appMode changes
   const appModeRef = useRef(appMode);
@@ -514,6 +581,20 @@ export function MapViewer() {
     };
   }, [matchLoading]);
 
+  // Reveal phase: hide map when loading starts
+  useEffect(() => {
+    if (matchLoading) setRevealPhase('hidden');
+  }, [matchLoading]);
+
+  // Reveal phase: when both flags clear, run the smooth reveal
+  useEffect(() => {
+    if (matchLoading || radarAcquired) return;
+    if (revealPhaseRef.current !== 'hidden') return;
+    setRevealPhase('revealing');
+    const timer = setTimeout(() => setRevealPhase('visible'), 700);
+    return () => clearTimeout(timer);
+  }, [matchLoading, radarAcquired]);
+
   // Main canvas draw
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -524,7 +605,8 @@ export function MapViewer() {
 
     // ── ANALYTICS MODE ──
     if (appMode === 'analytics') {
-      const data = analyticsData[selectedMap];
+      // Use per-match computed cells when a match is loaded; fall back to aggregate
+      const data = matchAnalytics ?? analyticsData[selectedMap];
       if (data) {
         drawAnalyticsOverlay(ctx, data.cells, data.gridSize, analyticsOverlay, heatmapOpacity);
       }
@@ -655,7 +737,7 @@ export function MapViewer() {
     if (aiHighlightZones.length > 0) {
       drawAiHighlights(ctx, aiHighlightZones, selectedMap, pulseRef.current);
     }
-  }, [appMode, matchData, currentTime, selectedMap, layers, pathStyle, highlightedPlayerId, analyticsData, analyticsOverlay, heatmapOpacity, aiHighlightZones]);
+  }, [appMode, matchData, matchAnalytics, currentTime, selectedMap, layers, pathStyle, highlightedPlayerId, analyticsData, analyticsOverlay, heatmapOpacity, aiHighlightZones]);
 
   // Re-draw when AI pulse changes
   useEffect(() => {
@@ -699,8 +781,13 @@ export function MapViewer() {
           alt={mapCfg.name}
           className="absolute inset-0 w-full h-full object-contain"
           style={{
-            opacity: appMode === 'replay' ? 0.88 : 0.6,
-            filter: 'brightness(1.05) contrast(1.04) saturate(0.85)',
+            opacity: revealPhase === 'hidden' ? 0 : (appMode === 'replay' ? 0.88 : 0.6),
+            filter: revealPhase === 'hidden'
+              ? 'brightness(0.2) saturate(0)'
+              : 'brightness(1.05) contrast(1.04) saturate(0.85)',
+            transition: revealPhase === 'revealing'
+              ? 'opacity 700ms ease, filter 700ms ease'
+              : 'none',
           }}
         />
         <canvas
@@ -708,18 +795,39 @@ export function MapViewer() {
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           className="absolute inset-0 w-full h-full object-contain"
-          style={{ zIndex: 10 }}
+          style={{
+            zIndex: 10,
+            opacity: revealPhase === 'hidden' ? 0 : 1,
+            transition: revealPhase === 'revealing' ? 'opacity 700ms ease 250ms' : 'none',
+          }}
         />
-        {/* Radar sweep canvas — sits above main canvas, below HUD */}
+        {/* Black mask — always in DOM, fades out via CSS transition */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            zIndex: 14,
+            background: '#07060b',
+            opacity: revealPhase === 'hidden' ? 1 : 0,
+            transition: revealPhase === 'revealing' ? 'opacity 700ms ease' : 'none',
+          }}
+        />
+        {/* Radar sweep canvas — sits above mask */}
         <canvas
           ref={radarCanvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-          style={{ zIndex: 11 }}
+          style={{ zIndex: 15 }}
         />
-        <div className="scanlines absolute inset-0" style={{ zIndex: 12 }} />
-        <div className="map-vignette absolute inset-0" style={{ zIndex: 13 }} />
+        <div
+          className="scanlines absolute inset-0"
+          style={{
+            zIndex: 16,
+            opacity: revealPhase === 'hidden' ? 0 : 1,
+            transition: revealPhase === 'revealing' ? 'opacity 700ms ease 300ms' : 'none',
+          }}
+        />
+        <div className="map-vignette absolute inset-0" style={{ zIndex: 17 }} />
       </div>
 
       {/* Edge vignette — blends map background into app background, stays outside zoom */}

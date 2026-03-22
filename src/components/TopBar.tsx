@@ -298,8 +298,8 @@ export function TopBar() {
         </div>
       </div>
 
-      {/* Match selector — replay mode only */}
-      {appMode === 'replay' && (
+      {/* Match selector — replay + analytics */}
+      {appMode !== 'ai' && (
         <div className="flex items-center gap-2">
           <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)' }}>Match</span>
           <StyledSelect

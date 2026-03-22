@@ -91,7 +91,7 @@ const ALL_DATES = ['February_10', 'February_11', 'February_12', 'February_13', '
 
 export const useVisualizerStore = create<VisualizerState>((set) => ({
   appMode: 'replay',
-  activePanel: null,
+  activePanel: 'layers',
   indexData: null,
   matchData: null,
   analyticsData: {},
@@ -118,7 +118,7 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
   setMatchLoading: (loading) => set({ matchLoading: loading }),
   setAppMode: (mode) => set((s) => ({
     appMode: mode,
-    activePanel: null,
+    activePanel: mode === 'replay' ? 'layers' : mode === 'analytics' ? 'heatmap' : null,
     // Keep highlight zones alive when switching into AI mode
     aiHighlightZones: mode === 'ai' ? s.aiHighlightZones : [],
   })),

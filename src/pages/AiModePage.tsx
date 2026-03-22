@@ -62,8 +62,19 @@ export function AiModePage() {
               <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13, color: '#fff', letterSpacing: '0.06em' }}>
                 AI Insights
               </div>
-              <div className="font-mono" style={{ fontSize: 8, color: 'rgba(255,255,255,0.28)' }}>
-                {import.meta.env.VITE_GROQ_API_KEY ? 'Llama 3.3 70B · Groq' : 'Gemini 2.0 Flash'} · zone graph RAG
+              <div className="font-mono flex items-center gap-1.5" style={{ fontSize: 8, lineHeight: 1 }}>
+                <span
+                  style={{
+                    width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                    background: hasKey ? '#34d399' : 'rgba(255,255,255,0.2)',
+                    boxShadow: hasKey ? '0 0 6px #34d399' : 'none',
+                  }}
+                />
+                <span style={{ color: hasKey ? '#34d399' : 'rgba(255,255,255,0.28)' }}>
+                  {hasKey
+                    ? (import.meta.env.VITE_GROQ_API_KEY ? 'Live · Llama 3.3 70B via Groq' : 'Live · Gemini 2.0 Flash')
+                    : 'Demo mode · pre-computed responses'}
+                </span>
               </div>
             </div>
 
@@ -141,15 +152,6 @@ export function AiModePage() {
             )}
           </div>
 
-          {/* Demo mode notice */}
-          {!hasKey && (
-            <div className="mx-4 mt-3 px-3 py-2 shrink-0" style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.18)' }}>
-              <div className="font-mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
-                <span style={{ color: '#60a5fa' }}>Demo mode</span> — responses are pre-computed from real match data.{' '}
-                Set <span style={{ color: '#ff8a00' }}>VITE_GROQ_API_KEY</span> or <span style={{ color: '#ff8a00' }}>VITE_GEMINI_API_KEY</span> for live AI.
-              </div>
-            </div>
-          )}
 
           {/* Chat history — flex-1 scrollable */}
           <div className="flex-1 min-h-0 overflow-hidden">

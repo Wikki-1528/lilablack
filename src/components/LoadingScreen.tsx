@@ -8,7 +8,7 @@ const BOOT_LINES = [
   { text: 'SYNCING PLAYER TRAJECTORIES',     ms: 1750 },
 ];
 
-const MIN_DISPLAY_MS = 2200;
+const MIN_DISPLAY_MS = 3000;
 
 export function LoadingScreen({ dataReady, onDone }: { dataReady: boolean; onDone: () => void }) {
   const [visibleLines, setVisibleLines] = useState(0);

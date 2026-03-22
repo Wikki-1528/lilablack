@@ -40,7 +40,7 @@ function matchScore(m: MatchIndex): number {
   );
 }
 
-const RADAR_MIN_MS = 500;
+const RADAR_MIN_MS = 3000;
 
 export default function Dashboard() {
   const [showLoader, setShowLoader] = useState(true);
