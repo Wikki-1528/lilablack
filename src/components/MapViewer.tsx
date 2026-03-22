@@ -174,9 +174,14 @@ function fmtRelTime(ms: number): string {
 
 export function MapViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const radarCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pulseRef = useRef(0);
   const rafRef = useRef<number>(0);
+  const radarRafRef = useRef<number>(0);
+  const radarAngleRef = useRef(0);
+  const acquiredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [radarAcquired, setRadarAcquired] = useState(false);
   const [crosshair, setCrosshair] = useState({ x: 0.5, y: 0.5 });
   const [worldPos, setWorldPos] = useState({ x: 0, z: 0 });
   const [onMap, setOnMap] = useState(false);
@@ -200,7 +205,7 @@ export function MapViewer() {
     appMode, selectedMap, matchData, currentTime,
     layers, pathStyle, highlightedPlayerId,
     analyticsData, analyticsOverlay, heatmapOpacity,
-    aiHighlightZones,
+    aiHighlightZones, matchLoading,
   } = useVisualizerStore();
 
   const mapCfg = MAP_CONFIGS[selectedMap] ?? MAP_CONFIGS.AmbroseValley;
@@ -393,6 +398,121 @@ export function MapViewer() {
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
   }, [aiHighlightZones.length]);
+
+  // Radar sweep animation
+  useEffect(() => {
+    const canvas = radarCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (!matchLoading && !radarAcquired) {
+      cancelAnimationFrame(radarRafRef.current);
+      ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+      return;
+    }
+
+    const drawRadar = () => {
+      ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+      const cx = CANVAS_SIZE / 2;
+      const cy = CANVAS_SIZE / 2;
+      const maxR = CANVAS_SIZE * 0.72;
+
+      // Dark tint
+      ctx.fillStyle = 'rgba(7,6,11,0.55)';
+      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+      // Concentric rings
+      for (let i = 1; i <= 4; i++) {
+        const r = (maxR / 4) * i;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,138,0,${0.06 + i * 0.02})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Cross hairs
+      ctx.strokeStyle = 'rgba(255,138,0,0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, CANVAS_SIZE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(CANVAS_SIZE, cy); ctx.stroke();
+
+      if (!radarAcquired) {
+        // Rotating sweep line
+        const angle = radarAngleRef.current;
+        const sweepX = cx + Math.cos(angle) * maxR;
+        const sweepY = cy + Math.sin(angle) * maxR;
+
+        // Trailing glow arc (120° behind the sweep line)
+        const trailGrad = ctx.createConicalGradient
+          ? null // fallback below
+          : null;
+
+        // Draw trail as multiple arc segments
+        const TRAIL = Math.PI * 0.65;
+        for (let i = 0; i < 32; i++) {
+          const t = i / 32;
+          const a0 = angle - TRAIL * (1 - t);
+          const a1 = angle - TRAIL * (1 - (i + 1) / 32);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, maxR, a0, a1);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(255,138,0,${t * 0.18})`;
+          ctx.fill();
+        }
+
+        // Sweep line
+        const lineGrad = ctx.createLinearGradient(cx, cy, sweepX, sweepY);
+        lineGrad.addColorStop(0, 'rgba(255,138,0,0)');
+        lineGrad.addColorStop(0.5, 'rgba(255,138,0,0.4)');
+        lineGrad.addColorStop(1, 'rgba(255,138,0,0.9)');
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(sweepX, sweepY);
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff8a00';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#ff8a00';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        radarAngleRef.current += 0.045;
+        radarRafRef.current = requestAnimationFrame(drawRadar);
+      } else {
+        // Acquired: full green ring flash
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(52,211,153,0.7)';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#34d399';
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    };
+
+    radarRafRef.current = requestAnimationFrame(drawRadar);
+    return () => cancelAnimationFrame(radarRafRef.current);
+  }, [matchLoading, radarAcquired]);
+
+  // When loading finishes, flash "ACQUIRED" then clear
+  useEffect(() => {
+    if (!matchLoading) return;
+    return () => {
+      // matchLoading just went false
+      setRadarAcquired(true);
+      if (acquiredTimerRef.current) clearTimeout(acquiredTimerRef.current);
+      acquiredTimerRef.current = setTimeout(() => setRadarAcquired(false), 700);
+    };
+  }, [matchLoading]);
 
   // Main canvas draw
   useEffect(() => {
@@ -590,8 +710,16 @@ export function MapViewer() {
           className="absolute inset-0 w-full h-full object-contain"
           style={{ zIndex: 10 }}
         />
-        <div className="scanlines absolute inset-0" style={{ zIndex: 11 }} />
-        <div className="map-vignette absolute inset-0" style={{ zIndex: 12 }} />
+        {/* Radar sweep canvas — sits above main canvas, below HUD */}
+        <canvas
+          ref={radarCanvasRef}
+          width={CANVAS_SIZE}
+          height={CANVAS_SIZE}
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          style={{ zIndex: 11 }}
+        />
+        <div className="scanlines absolute inset-0" style={{ zIndex: 12 }} />
+        <div className="map-vignette absolute inset-0" style={{ zIndex: 13 }} />
       </div>
 
       {/* Edge vignette — blends map background into app background, stays outside zoom */}
@@ -613,9 +741,20 @@ export function MapViewer() {
         <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#ff8a00', textShadow: '0 0 16px rgba(255,138,0,0.6)' }}>
           {mapCfg.name}
         </div>
-        <div className="font-mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
-          {worldPos.x.toFixed(0)} · {worldPos.z.toFixed(0)}
-        </div>
+        {matchLoading ? (
+          <div className="font-mono flex items-center gap-1.5" style={{ fontSize: 9, color: 'rgba(255,138,0,0.8)', letterSpacing: '0.1em', marginTop: 2 }}>
+            <span style={{ animation: 'blink 0.7s step-end infinite' }}>▶</span>
+            ACQUIRING MATCH DATA
+          </div>
+        ) : radarAcquired ? (
+          <div className="font-mono" style={{ fontSize: 9, color: '#34d399', letterSpacing: '0.1em', marginTop: 2 }}>
+            ✓ MATCH ACQUIRED
+          </div>
+        ) : (
+          <div className="font-mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+            {worldPos.x.toFixed(0)} · {worldPos.z.toFixed(0)}
+          </div>
+        )}
         {appMode === 'analytics' && (
           <div style={{ fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,138,0,0.7)', marginTop: 2, textTransform: 'uppercase' }}>
             Analytics Mode

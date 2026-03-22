@@ -49,7 +49,7 @@ export default function Dashboard() {
     selectedMatchId, selectedMap, selectedDate,
     setIndexData, setMatchData, setTimeBounds, setSelectedMatchId,
     setAnalyticsData, analyticsData,
-    setSelectedDate,
+    setSelectedDate, setMatchLoading,
     indexData,
   } = useVisualizerStore();
 
@@ -85,16 +85,17 @@ export default function Dashboard() {
   // Load match data
   useEffect(() => {
     if (!selectedMatchId) { setMatchData(null); return; }
+    setMatchLoading(true);
     fetch(BASE + 'data/matches/' + selectedMatchId + '.json')
       .then((r) => r.json())
       .then((data: MatchData) => {
-        // ts in JSON is Unix seconds — convert to ms for all frontend time math
         data.players.forEach((p) => p.events.forEach((e) => { e.ts = e.ts * 1000; }));
         setMatchData(data);
         const allTs = data.players.flatMap((p) => p.events.map((e) => e.ts));
         if (allTs.length > 0) setTimeBounds(Math.min(...allTs), Math.max(...allTs));
+        setMatchLoading(false);
       })
-      .catch(console.error);
+      .catch(() => setMatchLoading(false));
   }, [selectedMatchId]);
 
   // Pre-load all 3 analytics files on startup so map switching is instant

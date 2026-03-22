@@ -58,6 +58,10 @@ interface VisualizerState {
   isPlaying: boolean;
   playbackSpeed: number;
 
+  // Loading
+  matchLoading: boolean;
+  setMatchLoading: (loading: boolean) => void;
+
   // Actions
   setIndexData: (data: IndexData) => void;
   setMatchData: (data: MatchData | null) => void;
@@ -109,7 +113,9 @@ export const useVisualizerStore = create<VisualizerState>((set) => ({
   maxTime: 0,
   isPlaying: false,
   playbackSpeed: 1,
+  matchLoading: false,
 
+  setMatchLoading: (loading) => set({ matchLoading: loading }),
   setAppMode: (mode) => set((s) => ({
     appMode: mode,
     activePanel: null,
