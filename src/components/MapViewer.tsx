@@ -184,6 +184,18 @@ export function MapViewer() {
     type: string; icon: string; userId: string; ts: number; color: string; kills: number; deaths: number;
   } | null>(null);
 
+  // Zoom + pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 }); // normalized offset from center (0–1)
+  const [isDragging, setIsDragging] = useState(false);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 });
+  zoomRef.current = zoom;
+  panRef.current = pan;
+  isDraggingRef.current = isDragging;
+
   const {
     appMode, selectedMap, matchData, currentTime,
     layers, pathStyle, highlightedPlayerId,
@@ -248,20 +260,101 @@ export function MapViewer() {
     return min === Infinity ? 0 : min;
   }, [matchData]);
 
+  // Reset zoom/pan when map changes
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+  }, [selectedMap]);
+
+  // Non-passive wheel handler (needs preventDefault to stop page scroll)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) / rect.width;
+      const cy = (e.clientY - rect.top) / rect.height;
+      const oldZoom = zoomRef.current;
+      const factor = e.deltaY < 0 ? 1.12 : 0.9;
+      const newZoom = Math.max(1, Math.min(5, oldZoom * factor));
+      if (newZoom === oldZoom) return;
+      // Keep the point under cursor fixed while zooming
+      const oldPan = panRef.current;
+      const ratio = newZoom / oldZoom;
+      const newPan = {
+        x: (cx - 0.5) * (1 - ratio) + oldPan.x * ratio,
+        y: (cy - 0.5) * (1 - ratio) + oldPan.y * ratio,
+      };
+      // Clamp so map edges don't go past container edges
+      const maxPan = (newZoom - 1) / (2 * newZoom);
+      newPan.x = Math.max(-maxPan, Math.min(maxPan, newPan.x));
+      newPan.y = Math.max(-maxPan, Math.min(maxPan, newPan.y));
+      setZoom(newZoom);
+      setPan(newPan);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoomRef.current <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+    };
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const rx = (e.clientX - rect.left) / rect.width;
-    const ry = (e.clientY - rect.top) / rect.height;
-    setCrosshair({ x: rx, y: ry });
+    const cx = (e.clientX - rect.left) / rect.width;
+    const cy = (e.clientY - rect.top) / rect.height;
+
+    // Drag-to-pan
+    if (isDraggingRef.current) {
+      const dx = (e.clientX - dragStartRef.current.mouseX) / rect.width;
+      const dy = (e.clientY - dragStartRef.current.mouseY) / rect.height;
+      const z = zoomRef.current;
+      const newPan = {
+        x: dragStartRef.current.panX + dx / z,
+        y: dragStartRef.current.panY + dy / z,
+      };
+      const maxPan = (z - 1) / (2 * z);
+      newPan.x = Math.max(-maxPan, Math.min(maxPan, newPan.x));
+      newPan.y = Math.max(-maxPan, Math.min(maxPan, newPan.y));
+      setPan(newPan);
+      setCrosshair({ x: cx, y: cy });
+      return;
+    }
+
+    setCrosshair({ x: cx, y: cy });
+    setOnMap(true);
+
+    // Convert cursor position to map-space (accounts for zoom + pan)
+    const z = zoomRef.current;
+    const p = panRef.current;
+    const rx = (cx - 0.5 - p.x) / z + 0.5;
+    const ry = (cy - 0.5 - p.y) / z + 0.5;
+
     setWorldPos({
       x: mapCfg.originX + rx * mapCfg.scale,
       z: mapCfg.originZ + (1 - ry) * mapCfg.scale,
     });
-    setOnMap(true);
-    // Event hover detection (replay mode only)
+
+    // Event hover detection (replay mode only) — hit radius shrinks with zoom
     if (appModeRef.current === 'replay') {
-      const HIT = 0.022;
+      const HIT = 0.022 / z;
       let best: typeof visibleEventsRef.current[0] | null = null;
       let bestDist = HIT;
       for (const evt of visibleEventsRef.current) {
@@ -282,6 +375,7 @@ export function MapViewer() {
 
   const handleMouseLeave = useCallback(() => {
     setOnMap(false);
+    setIsDragging(false);
     setHoveredEvent(null);
   }, []);
 
@@ -461,13 +555,24 @@ export function MapViewer() {
 
   return (
     <div
-      className="relative w-full h-full flex items-center justify-center bg-[#06050a] overflow-hidden"
+      className="relative w-full h-full flex items-center justify-center bg-[#09090b] overflow-hidden"
       ref={containerRef}
+      onMouseEnter={() => setOnMap(true)}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : undefined }}
     >
-      {/* Map + canvas */}
-      <div className="relative w-full h-full">
+      {/* Map + canvas — zoom/pan applied here only */}
+      <div
+        className="relative w-full h-full"
+        style={{
+          transform: zoom > 1 ? `translate(${pan.x * 100}%, ${pan.y * 100}%) scale(${zoom})` : undefined,
+          transformOrigin: 'center center',
+          willChange: zoom > 1 ? 'transform' : undefined,
+        }}
+      >
         <img
           src={imgUrl}
           alt={mapCfg.name}
@@ -487,6 +592,15 @@ export function MapViewer() {
         <div className="scanlines absolute inset-0" style={{ zIndex: 11 }} />
         <div className="map-vignette absolute inset-0" style={{ zIndex: 12 }} />
       </div>
+
+      {/* Edge vignette — blends map background into app background, stays outside zoom */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          zIndex: 13,
+          background: 'radial-gradient(ellipse at center, transparent 52%, #09090b 88%)',
+        }}
+      />
 
       {/* Corner brackets */}
       <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }}>
@@ -508,16 +622,33 @@ export function MapViewer() {
         )}
       </div>
 
-      {/* Top-right HUD — replay only */}
-      {appMode === 'replay' && matchData && (
-        <div className="absolute top-6 right-14 pointer-events-none text-right" style={{ zIndex: 21 }}>
-          <div className="font-mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+      {/* Top-right HUD — replay only + zoom badge */}
+      <div className="absolute top-6 right-14 text-right flex flex-col items-end gap-1.5" style={{ zIndex: 21 }}>
+        {appMode === 'replay' && matchData && (
+          <div className="font-mono pointer-events-none" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
             <span style={{ color: 'rgba(96,165,250,0.8)', fontWeight: 700 }}>{matchData.players.filter(p => !p.isBot).length}H</span>
             <span style={{ color: 'rgba(255,255,255,0.25)' }}> · </span>
             <span style={{ color: 'rgba(255,138,0,0.8)', fontWeight: 700 }}>{matchData.players.filter(p => p.isBot).length}B</span>
           </div>
-        </div>
-      )}
+        )}
+        {zoom > 1 && (
+          <button
+            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+            className="font-mono flex items-center gap-1.5 px-2 py-1 transition-opacity hover:opacity-100"
+            style={{
+              fontSize: 9,
+              color: '#ff8a00',
+              background: 'rgba(255,138,0,0.1)',
+              border: '1px solid rgba(255,138,0,0.3)',
+              opacity: 0.85,
+              letterSpacing: '0.08em',
+            }}
+            title="Reset zoom"
+          >
+            {zoom.toFixed(1)}× RESET
+          </button>
+        )}
+      </div>
 
       {/* AI zones label */}
       {aiHighlightZones.length > 0 && (
