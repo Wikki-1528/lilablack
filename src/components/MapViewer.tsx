@@ -278,7 +278,8 @@ export function MapViewer() {
       const cx = (e.clientX - rect.left) / rect.width;
       const cy = (e.clientY - rect.top) / rect.height;
       const oldZoom = zoomRef.current;
-      const factor = e.deltaY < 0 ? 1.12 : 0.9;
+      // Delta-proportional: fast scroll = bigger zoom step; trackpad stays smooth
+      const factor = Math.pow(0.998, e.deltaY);
       const newZoom = Math.max(1, Math.min(5, oldZoom * factor));
       if (newZoom === oldZoom) return;
       // Keep the point under cursor fixed while zooming
