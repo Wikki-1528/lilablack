@@ -40,9 +40,12 @@ function matchScore(m: MatchIndex): number {
   );
 }
 
+const RADAR_MIN_MS = 500;
+
 export default function Dashboard() {
   const [showLoader, setShowLoader] = useState(true);
   const [dataReady, setDataReady] = useState(false);
+  const matchLoadStartRef = React.useRef(0);
 
   const {
     appMode,
@@ -85,6 +88,7 @@ export default function Dashboard() {
   // Load match data
   useEffect(() => {
     if (!selectedMatchId) { setMatchData(null); return; }
+    matchLoadStartRef.current = Date.now();
     setMatchLoading(true);
     fetch(BASE + 'data/matches/' + selectedMatchId + '.json')
       .then((r) => r.json())
@@ -93,7 +97,8 @@ export default function Dashboard() {
         setMatchData(data);
         const allTs = data.players.flatMap((p) => p.events.map((e) => e.ts));
         if (allTs.length > 0) setTimeBounds(Math.min(...allTs), Math.max(...allTs));
-        setMatchLoading(false);
+        const elapsed = Date.now() - matchLoadStartRef.current;
+        setTimeout(() => setMatchLoading(false), Math.max(0, RADAR_MIN_MS - elapsed));
       })
       .catch(() => setMatchLoading(false));
   }, [selectedMatchId]);
