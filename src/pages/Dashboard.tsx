@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { MapViewer } from '@/components/MapViewer';
 import { Timeline } from '@/components/Timeline';
@@ -6,6 +6,7 @@ import { RightToolbar } from '@/components/RightToolbar';
 import { ContextPanel } from '@/components/ContextPanel';
 import { KillFeed } from '@/components/KillFeed';
 import { AiModePage } from '@/pages/AiModePage';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { useVisualizerStore } from '@/lib/store';
 import type { IndexData, MatchData, AnalyticsData, MatchIndex } from '@/lib/types';
 
@@ -40,6 +41,9 @@ function matchScore(m: MatchIndex): number {
 }
 
 export default function Dashboard() {
+  const [showLoader, setShowLoader] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
+
   const {
     appMode,
     selectedMatchId, selectedMap, selectedDate,
@@ -56,6 +60,7 @@ export default function Dashboard() {
       .then((r) => r.json())
       .then((data: IndexData) => {
         setIndexData(data);
+        setDataReady(true);
         const richest = data.matches
           .filter((m) => m.map === 'AmbroseValley')
           .sort((a, b) => matchScore(b) - matchScore(a))[0];
@@ -106,6 +111,12 @@ export default function Dashboard() {
 
   return (
     <div className="w-screen h-screen flex flex-col lila-grid-bg overflow-hidden" style={{ backgroundColor: '#07060b' }}>
+      {showLoader && (
+        <LoadingScreen
+          dataReady={dataReady}
+          onDone={() => setShowLoader(false)}
+        />
+      )}
       <TopBar />
 
       {appMode === 'ai' ? (
